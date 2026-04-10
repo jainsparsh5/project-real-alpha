@@ -39,6 +39,9 @@ export default function LaunchpadDashboard() {
   const [state, setState] =
     useState<(typeof cognitiveStates)[number]["id"]>("energized");
   const [launched, setLaunched] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [submitSuccess, setSubmitSuccess] = useState("");
 
   const currentDateLabel = useMemo(() => {
     return new Intl.DateTimeFormat("en-US", {
@@ -209,10 +212,53 @@ export default function LaunchpadDashboard() {
 
         <form
           className="rounded-sm bg-surface-high p-5 shadow-[0_20px_44px_rgba(0,0,0,0.22)] sm:p-6"
-          onSubmit={(event) => {
+          onSubmit={async (event) => {
             event.preventDefault();
-            if (minimumReached) {
+
+            if (!minimumReached || isSubmitting) {
+              return;
+            }
+
+            setIsSubmitting(true);
+            setSubmitError("");
+            setSubmitSuccess("");
+
+            try {
+              const response = await fetch("/api/leads", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  sleepHours,
+                  wakeTime,
+                  manifest,
+                  state,
+                  resilienceBoost,
+                }),
+              });
+
+              const payload = (await response.json()) as {
+                success?: boolean;
+                message?: string;
+              };
+
+              if (!response.ok || !payload.success) {
+                throw new Error(payload.message || "Could not save your entry.");
+              }
+
               setLaunched(true);
+              setSubmitSuccess("Entry saved to backend.");
+            } catch (error) {
+              const message =
+                error instanceof Error
+                  ? error.message
+                  : "Failed to connect to backend.";
+
+              setSubmitError(message);
+              setLaunched(false);
+            } finally {
+              setIsSubmitting(false);
             }
           }}
         >
@@ -259,16 +305,28 @@ export default function LaunchpadDashboard() {
 
             <button
               type="submit"
-              disabled={!minimumReached}
+              disabled={!minimumReached || isSubmitting}
               className={`inline-flex min-h-12 items-center justify-center rounded-[0.2rem] px-8 text-[0.82rem] font-semibold uppercase tracking-[0.24em] ${
-                minimumReached
+                minimumReached && !isSubmitting
                   ? "bg-[linear-gradient(135deg,var(--primary),var(--primary-container))] text-[#0b1112] shadow-[0_0_28px_rgba(143,245,255,0.16)] hover:-translate-y-px"
                   : "cursor-not-allowed bg-white/8 text-white/26"
               }`}
             >
-              {launched ? "Day Active" : "Commence Day"}
+              {isSubmitting
+                ? "Saving..."
+                : launched
+                  ? "Day Active"
+                  : "Commence Day"}
             </button>
           </div>
+
+          {submitError ? (
+            <p className="mt-3 text-sm text-red-300">{submitError}</p>
+          ) : null}
+
+          {submitSuccess ? (
+            <p className="mt-3 text-sm text-primary">{submitSuccess}</p>
+          ) : null}
         </form>
       </section>
 
