@@ -1,11 +1,5 @@
 import type { Metadata } from "next";
-import {
-  ClerkProvider,
-  Show,
-  SignInButton,
-  SignUpButton,
-  UserButton,
-} from "@clerk/nextjs";
+import { ClerkProvider } from "@clerk/nextjs";
 import { Manrope, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
@@ -37,18 +31,7 @@ export default function RootLayout({
       className={`${manrope.variable} ${spaceGrotesk.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <ClerkProvider>
-          <header className="px-5 py-4 sm:px-8">
-            <div className="mx-auto flex w-full max-w-6xl items-center justify-end gap-3">
-              <Show when="signed-out">
-                <SignInButton />
-                <SignUpButton />
-              </Show>
-              <Show when="signed-in">
-                <UserButton />
-              </Show>
-            </div>
-          </header>
+        <ClerkProvider afterSignOutUrl="/sign-in">
           {children}
         </ClerkProvider>
       </body>

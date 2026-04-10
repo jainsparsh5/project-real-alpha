@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
+import { UserButton } from "@clerk/nextjs";
 
 import {
   FlameIcon,
   TrophyIcon,
-  UserIcon,
 } from "@/components/command-icons";
 import CommandNav from "@/components/command-nav";
 
@@ -26,7 +26,7 @@ export default function CommandShell({
             </div>
 
             <div className="flex items-center gap-2">
-              {[FlameIcon, TrophyIcon, UserIcon].map((Icon, index) => (
+              {[FlameIcon, TrophyIcon].map((Icon, index) => (
                 <button
                   key={index}
                   type="button"
@@ -35,6 +35,10 @@ export default function CommandShell({
                   <Icon className="h-4.5 w-4.5" />
                 </button>
               ))}
+
+              <div className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.02]">
+                <UserButton />
+              </div>
             </div>
           </header>
 

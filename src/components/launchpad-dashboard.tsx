@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   BatteryIcon,
@@ -41,6 +43,8 @@ type RiseAndGrindEntry = {
 };
 
 export default function LaunchpadDashboard() {
+  const { isLoaded, isSignedIn } = useAuth();
+  const router = useRouter();
   const [sleepDurationHours, setSleepDurationHours] = useState(
     defaultSleepDurationHours
   );
@@ -56,6 +60,16 @@ export default function LaunchpadDashboard() {
   const [isLoadingEntry, setIsLoadingEntry] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState("");
+
+  const resetEntryFormState = useCallback(() => {
+    setWakeTime("");
+    setSleepDurationHours(defaultSleepDurationHours);
+    setState("energized");
+    setGratitude("");
+    setLaunched(false);
+    setSubmitSuccess("");
+    setSubmitError("");
+  }, []);
 
   const currentDateLabel = useMemo(() => {
     return new Intl.DateTimeFormat("en-US", {
@@ -84,7 +98,20 @@ export default function LaunchpadDashboard() {
   const wakeSet = wakeTime.length > 0;
 
   useEffect(() => {
-    if (!entryDate) {
+    if (!isLoaded || isSignedIn !== false) {
+      return;
+    }
+
+    resetEntryFormState();
+    setEntryDate(new Date().toISOString().slice(0, 10));
+    setIsLoadingEntry(false);
+    setIsSubmitting(false);
+    router.refresh();
+    window.location.replace("/sign-in");
+  }, [isLoaded, isSignedIn, resetEntryFormState, router]);
+
+  useEffect(() => {
+    if (!entryDate || !isLoaded || !isSignedIn) {
       return;
     }
 
@@ -100,6 +127,13 @@ export default function LaunchpadDashboard() {
             cache: "no-store",
           }
         );
+
+        if (response.status === 401) {
+          if (!isCancelled) {
+            resetEntryFormState();
+          }
+          return;
+        }
 
         const payload = (await response.json()) as {
           success?: boolean;
@@ -118,13 +152,7 @@ export default function LaunchpadDashboard() {
         const entry = payload.data?.[0];
 
         if (!entry) {
-          setWakeTime("");
-          setSleepDurationHours(defaultSleepDurationHours);
-          setState("energized");
-          setGratitude("");
-          setLaunched(false);
-          setSubmitSuccess("");
-          setSubmitError("");
+          resetEntryFormState();
           return;
         }
 
@@ -162,7 +190,7 @@ export default function LaunchpadDashboard() {
     return () => {
       isCancelled = true;
     };
-  }, [entryDate]);
+  }, [entryDate, isLoaded, isSignedIn, resetEntryFormState]);
 
   return (
     <div className="flex flex-col gap-6">
