@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   BatteryIcon,
   BoltIcon,
   MoonIcon,
-  SparkIcon,
 } from "@/components/command-icons";
 
 const cognitiveStates = [
@@ -31,15 +30,30 @@ const cognitiveStates = [
 ] as const;
 
 const progressTicks = [0, 1, 2, 3, 4, 5];
+const defaultSleepDurationHours = 7.5;
+
+type RiseAndGrindEntry = {
+  wakeUpTime: string;
+  sleepDurationHours: number;
+  mood?: (typeof cognitiveStates)[number]["id"];
+  state?: (typeof cognitiveStates)[number]["id"];
+  gratitude: string;
+};
 
 export default function LaunchpadDashboard() {
-  const [sleepHours, setSleepHours] = useState(7.5);
+  const [sleepDurationHours, setSleepDurationHours] = useState(
+    defaultSleepDurationHours
+  );
   const [wakeTime, setWakeTime] = useState("");
-  const [manifest, setManifest] = useState("");
+  const [gratitude, setGratitude] = useState("");
+  const [entryDate, setEntryDate] = useState(() =>
+    new Date().toISOString().slice(0, 10)
+  );
   const [state, setState] =
     useState<(typeof cognitiveStates)[number]["id"]>("energized");
   const [launched, setLaunched] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingEntry, setIsLoadingEntry] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState("");
 
@@ -64,15 +78,91 @@ export default function LaunchpadDashboard() {
     return `${normalizedHours}:${paddedMinutes} ${meridiem}`;
   }, [wakeTime]);
 
-  const manifestLength = manifest.trim().length;
-  const minimumReached = manifestLength >= 20;
+  const gratitudeLength = gratitude.trim().length;
+  const minimumReached = gratitudeLength >= 8;
 
-  const resilienceBoost = useMemo(() => {
-    const baseline = state === "energized" ? 14 : state === "sleepy" ? 8 : 6;
-    return baseline + Math.min(8, Math.floor(manifestLength / 24));
-  }, [manifestLength, state]);
+  const wakeSet = wakeTime.length > 0;
 
-  const activeState = cognitiveStates.find((item) => item.id === state)!;
+  useEffect(() => {
+    if (!entryDate) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadEntryForDate = async () => {
+      setIsLoadingEntry(true);
+
+      try {
+        const response = await fetch(
+          `/api/riseandgrind?date=${encodeURIComponent(entryDate)}`,
+          {
+            cache: "no-store",
+          }
+        );
+
+        const payload = (await response.json()) as {
+          success?: boolean;
+          message?: string;
+          data?: RiseAndGrindEntry[];
+        };
+
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.message || "Could not load saved entry.");
+        }
+
+        if (isCancelled) {
+          return;
+        }
+
+        const entry = payload.data?.[0];
+
+        if (!entry) {
+          setWakeTime("");
+          setSleepDurationHours(defaultSleepDurationHours);
+          setState("energized");
+          setGratitude("");
+          setLaunched(false);
+          setSubmitSuccess("");
+          setSubmitError("");
+          return;
+        }
+
+        const entryMood = entry.mood || entry.state;
+        const moodIsValid = cognitiveStates.some(({ id }) => id === entryMood);
+
+        setWakeTime(entry.wakeUpTime || "");
+        setSleepDurationHours(
+          Number.isFinite(Number(entry.sleepDurationHours))
+            ? Number(entry.sleepDurationHours)
+            : defaultSleepDurationHours
+        );
+        setState(moodIsValid ? entryMood! : "energized");
+        setGratitude(entry.gratitude || "");
+        setLaunched(true);
+        setSubmitSuccess("Loaded your saved entry for this date.");
+        setSubmitError("");
+      } catch (error) {
+        if (!isCancelled) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Failed to load saved entry.";
+          setSubmitError(message);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingEntry(false);
+        }
+      }
+    };
+
+    void loadEntryForDate();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [entryDate]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -101,7 +191,7 @@ export default function LaunchpadDashboard() {
           <div className="w-full max-w-[320px] self-start lg:self-end">
             <div className="rounded-sm border border-white/6 bg-black/54 p-4 shadow-[0_16px_40px_rgba(0,0,0,0.24)] backdrop-blur-sm">
               <p className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.24em] text-primary/80">
-                Wake Time
+                Wake and Date
               </p>
               <label className="mt-3 block text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/28">
                 Set wake up time
@@ -113,8 +203,20 @@ export default function LaunchpadDashboard() {
                 value={wakeTime}
                 onChange={(event) => setWakeTime(event.target.value)}
               />
+
+              <label className="mt-3 block text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/28">
+                Select date
+              </label>
+              <input
+                aria-label="Select entry date"
+                className="mt-2 w-full rounded-[0.18rem] border border-white/8 bg-black/82 px-3 py-3 font-display text-[1.15rem] tracking-[-0.03em] text-white outline-none transition focus:border-primary/60 focus:shadow-[0_0_0_1px_rgba(143,245,255,0.12)]"
+                type="date"
+                value={entryDate}
+                onChange={(event) => setEntryDate(event.target.value)}
+              />
+
               <p className="mt-3 text-[0.76rem] uppercase tracking-[0.2em] text-white/34">
-                {wakeTime ? `King woke up at ${wakeTimeLabel}` : "Set wake up time"}
+                {wakeSet ? `Wake ${wakeTimeLabel}` : "Set wake time"}
               </p>
             </div>
           </div>
@@ -136,7 +238,7 @@ export default function LaunchpadDashboard() {
 
             <div className="mt-6 flex items-end gap-3">
               <div className="bg-black/72 px-4 py-2.5 font-display text-[2.2rem] font-semibold leading-none tracking-[-0.04em] text-white">
-                {sleepHours.toFixed(1)}
+                {sleepDurationHours.toFixed(1)}
               </div>
               <span className="pb-2 text-xl uppercase tracking-[0.02em] text-white/28">
                 HRS
@@ -151,8 +253,10 @@ export default function LaunchpadDashboard() {
                 min="4"
                 max="10"
                 step="0.5"
-                value={sleepHours}
-                onChange={(event) => setSleepHours(Number(event.target.value))}
+                value={sleepDurationHours}
+                onChange={(event) =>
+                  setSleepDurationHours(Number(event.target.value))
+                }
               />
 
               <div className="mt-4 flex gap-2">
@@ -162,7 +266,7 @@ export default function LaunchpadDashboard() {
                     className="h-0.75 flex-1 rounded-full bg-white/16"
                     style={{
                       background:
-                        tick <= Math.round(sleepHours - 4)
+                        tick <= Math.round(sleepDurationHours - 4)
                           ? "rgba(143, 245, 255, 0.92)"
                           : "rgba(255,255,255,0.15)",
                     }}
@@ -215,7 +319,13 @@ export default function LaunchpadDashboard() {
           onSubmit={async (event) => {
             event.preventDefault();
 
-            if (!minimumReached || isSubmitting) {
+            if (
+              !minimumReached ||
+              isSubmitting ||
+              isLoadingEntry ||
+              !wakeSet ||
+              !entryDate
+            ) {
               return;
             }
 
@@ -224,17 +334,17 @@ export default function LaunchpadDashboard() {
             setSubmitSuccess("");
 
             try {
-              const response = await fetch("/api/leads", {
+              const response = await fetch("/api/riseandgrind", {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                  sleepHours,
-                  wakeTime,
-                  manifest,
-                  state,
-                  resilienceBoost,
+                  wakeUpTime: wakeTime,
+                  sleepDurationHours,
+                  date: entryDate,
+                  mood: state,
+                  gratitude,
                 }),
               });
 
@@ -248,7 +358,8 @@ export default function LaunchpadDashboard() {
               }
 
               setLaunched(true);
-              setSubmitSuccess("Entry saved to backend.");
+              setSubmitSuccess("Entry saved for this date.");
+              setSubmitError("");
             } catch (error) {
               const message =
                 error instanceof Error
@@ -269,7 +380,7 @@ export default function LaunchpadDashboard() {
               </p>
             </div>
             <div className="text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/22">
-              Minimum 20 Words Required
+              Minimum 8 Characters Required
             </div>
           </div>
 
@@ -277,9 +388,9 @@ export default function LaunchpadDashboard() {
             <textarea
               className="manifest-scrollbar min-h-43 w-full resize-none bg-transparent text-lg leading-8 text-white/92 outline-none placeholder:text-white/22"
               placeholder="Write one thing you're grateful for today..."
-              value={manifest}
+              value={gratitude}
               onChange={(event) => {
-                setManifest(event.target.value);
+                setGratitude(event.target.value);
                 if (launched) {
                   setLaunched(false);
                 }
@@ -289,30 +400,38 @@ export default function LaunchpadDashboard() {
 
           <div className="mt-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex items-center gap-3 text-sm text-white/34">
-              <div className="flex h-10 w-10 items-center justify-center rounded-sm bg-white/5 text-primary">
-                <SparkIcon className="h-4.5 w-4.5" />
-              </div>
               <div>
                 <p>
-                  Focusing on the positive increases cognitive resilience by{" "}
-                  <span className="text-white/72">{resilienceBoost}%</span>.
+                  Mood selected: <span className="text-white/72">{state}</span>
                 </p>
                 <p className="mt-1 text-[0.72rem] uppercase tracking-[0.16em] text-white/22">
-                  {activeState.label} protocol selected · {manifestLength} chars
+                  {sleepDurationHours.toFixed(1)} hrs planned sleep
                 </p>
               </div>
             </div>
 
             <button
               type="submit"
-              disabled={!minimumReached || isSubmitting}
+              disabled={
+                !minimumReached ||
+                isSubmitting ||
+                isLoadingEntry ||
+                !wakeSet ||
+                !entryDate
+              }
               className={`inline-flex min-h-12 items-center justify-center rounded-[0.2rem] px-8 text-[0.82rem] font-semibold uppercase tracking-[0.24em] ${
-                minimumReached && !isSubmitting
+                minimumReached &&
+                !isSubmitting &&
+                !isLoadingEntry &&
+                wakeSet &&
+                !!entryDate
                   ? "bg-[linear-gradient(135deg,var(--primary),var(--primary-container))] text-[#0b1112] shadow-[0_0_28px_rgba(143,245,255,0.16)] hover:-translate-y-px"
                   : "cursor-not-allowed bg-white/8 text-white/26"
               }`}
             >
-              {isSubmitting
+              {isLoadingEntry
+                ? "Loading..."
+                : isSubmitting
                 ? "Saving..."
                 : launched
                   ? "Day Active"
@@ -328,42 +447,6 @@ export default function LaunchpadDashboard() {
             <p className="mt-3 text-sm text-primary">{submitSuccess}</p>
           ) : null}
         </form>
-      </section>
-
-      <section className="grid gap-4 rounded-sm border border-white/3 bg-black/22 px-4 py-5 sm:grid-cols-2 xl:grid-cols-4">
-        <div>
-          <p className="text-[0.56rem] uppercase tracking-[0.22em] text-white/18">
-            Kernel Version
-          </p>
-          <p className="mt-1 font-display text-lg tracking-[-0.03em] text-white/82">
-            ALPHA_v2.0.4
-          </p>
-        </div>
-
-        <div>
-          <p className="text-[0.56rem] uppercase tracking-[0.22em] text-white/18">
-            Global Rank
-          </p>
-          <p className="mt-1 font-display text-lg tracking-[-0.03em] text-white/82">
-            #1,402 / 50K
-          </p>
-        </div>
-
-        <div>
-          <p className="text-[0.56rem] uppercase tracking-[0.22em] text-white/18">
-            Daily Streak
-          </p>
-          <p className="mt-1 font-display text-lg tracking-[-0.03em] text-white/82">
-            42 Days Active
-          </p>
-        </div>
-
-        <div className="flex items-center justify-start gap-2 xl:justify-end">
-          <span className="h-2.5 w-2.5 rounded-full bg-primary shadow-[0_0_12px_rgba(143,245,255,0.8)]" />
-          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.24em] text-white/54">
-            Uplink Stable
-          </p>
-        </div>
       </section>
     </div>
   );

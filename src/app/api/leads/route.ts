@@ -3,6 +3,8 @@ import { auth } from "@clerk/nextjs/server";
 
 import { getDatabase, mongoCollectionName } from "@/lib/mongodb";
 
+const leadType = "lead";
+
 type LeadPayload = {
   sleepHours: number;
   wakeTime: string;
@@ -28,7 +30,7 @@ export async function GET() {
     const db = await getDatabase();
     const leads = await db
       .collection(mongoCollectionName)
-      .find({ userId })
+      .find({ userId, type: leadType })
       .sort({ createdAt: -1 })
       .limit(25)
       .toArray();
@@ -78,6 +80,7 @@ export async function POST(request: Request) {
     const db = await getDatabase();
     const document = {
       _id: new ObjectId(),
+      type: leadType,
       userId,
       sleepHours: Number(body.sleepHours || 0),
       wakeTime: body.wakeTime || "",
