@@ -1,10 +1,9 @@
-import type { ReactNode } from "react";
-import { UserButton } from "@clerk/nextjs";
+"use client";
 
-import {
-  FlameIcon,
-  TrophyIcon,
-} from "@/components/command-icons";
+import type { ReactNode } from "react";
+import { UserButton, useAuth } from "@clerk/nextjs";
+
+import { FlameIcon } from "@/components/command-icons";
 import CommandNav from "@/components/command-nav";
 
 export default function CommandShell({
@@ -12,6 +11,8 @@ export default function CommandShell({
 }: {
   children: ReactNode;
 }) {
+  const { isLoaded, isSignedIn } = useAuth();
+
   return (
     <div className="min-h-screen bg-surface text-foreground">
       <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col lg:flex-row">
@@ -26,9 +27,15 @@ export default function CommandShell({
             </div>
 
             <div className="flex items-center gap-2">
-              <div className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.02]">
-                <UserButton />
-              </div>
+              {isLoaded && isSignedIn ? (
+                <div className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.02]">
+                  <UserButton />
+                </div>
+              ) : (
+                <div className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.02] text-white/60">
+                  <FlameIcon className="h-4.5 w-4.5" />
+                </div>
+              )}
             </div>
           </header>
 

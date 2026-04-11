@@ -1,5 +1,6 @@
 "use client";
 
+import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -33,6 +34,7 @@ function cn(...values: Array<string | false | null | undefined>) {
 
 export default function CommandNav() {
   const pathname = usePathname();
+  const { isLoaded, isSignedIn } = useAuth();
 
   return (
     <div className="flex h-full flex-col bg-[#0b0b0c] px-4 py-5 sm:px-5 lg:px-4 lg:py-6">
@@ -48,11 +50,19 @@ export default function CommandNav() {
       <nav className="flex flex-wrap gap-2 lg:flex-col lg:gap-1.5">
         {primaryItems.map(({ href, label, icon: Icon }) => {
           const isActive = pathname === href;
+          const requiresSignIn = href !== "/";
 
           return (
             <Link
               key={href}
               href={href}
+              onClick={(event) => {
+                if (requiresSignIn && isLoaded && !isSignedIn) {
+                  event.preventDefault();
+                  const redirectUrl = encodeURIComponent(href);
+                  window.location.assign(`/sign-in?redirect_url=${redirectUrl}`);
+                }
+              }}
               className={cn(
                 "group relative flex min-w-[148px] items-center gap-3 rounded-[0.25rem] px-3 py-3 text-[0.68rem] uppercase tracking-[0.2em] text-white/34",
                 "bg-transparent hover:bg-white/[0.04] hover:text-white/70 lg:min-w-0",
@@ -74,21 +84,8 @@ export default function CommandNav() {
         className="mt-5 inline-flex items-center justify-center gap-3 rounded-[0.25rem] bg-[linear-gradient(135deg,var(--primary),var(--primary-container))] px-4 py-3 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-[#0b1011] shadow-[0_0_24px_rgba(143,245,255,0.18)] hover:shadow-[0_0_32px_rgba(143,245,255,0.28)]"
       >
         <WaveIcon className="h-4 w-4" />
-        <span>Voice Capture</span>
       </button>
 
-      <div className="mt-5 flex flex-wrap gap-2 border-t border-white/[0.04] pt-4 lg:flex-col lg:gap-1.5">
-        {utilityItems.map(({ href, label, icon: Icon }) => (
-          <Link
-            key={label}
-            href={href}
-            className="flex items-center gap-3 rounded-[0.25rem] px-3 py-2 text-[0.62rem] uppercase tracking-[0.2em] text-white/28 hover:bg-white/[0.04] hover:text-white/62"
-          >
-            <Icon className="h-4 w-4" />
-            <span>{label}</span>
-          </Link>
-        ))}
-      </div>
     </div>
   );
 }
