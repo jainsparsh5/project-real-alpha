@@ -42,9 +42,6 @@ export default function CommandNav() {
         <div className="font-display text-[1.55rem] font-semibold uppercase tracking-[0.12em] text-primary">
           Alpha Command
         </div>
-        <p className="mt-1 text-[0.62rem] uppercase tracking-[0.22em] text-white/28">
-          Status: Optimized
-        </p>
       </div>
 
       <nav className="flex flex-wrap gap-2 lg:flex-col lg:gap-1.5">

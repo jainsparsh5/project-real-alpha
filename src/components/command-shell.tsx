@@ -1,9 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { UserButton, useAuth } from "@clerk/nextjs";
+import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
 
-import { FlameIcon } from "@/components/command-icons";
+import { UserIcon } from "@/components/command-icons";
 import CommandNav from "@/components/command-nav";
 
 export default function CommandShell({
@@ -32,8 +32,20 @@ export default function CommandShell({
                   <UserButton />
                 </div>
               ) : (
-                <div className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.02] text-white/60">
-                  <FlameIcon className="h-4.5 w-4.5" />
+                <div className="group relative">
+                  <SignInButton mode="redirect" forceRedirectUrl="/">
+                    <button
+                      type="button"
+                      aria-label="Login or Sign Up"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.02] text-white/60 hover:border-primary/35 hover:text-primary"
+                    >
+                      <UserIcon className="h-4.5 w-4.5" />
+                    </button>
+                  </SignInButton>
+
+                  <span className="pointer-events-none absolute right-0 top-11 z-20 whitespace-nowrap rounded-sm border border-white/12 bg-[#0d1112] px-2 py-1 text-[0.62rem] uppercase tracking-[0.12em] text-white/78 opacity-0 shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition-opacity duration-150 group-hover:opacity-100">
+                    Login / Sign Up
+                  </span>
                 </div>
               )}
             </div>
