@@ -1,7 +1,6 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
@@ -44,7 +43,6 @@ type RiseAndGrindEntry = {
 
 export default function LaunchpadDashboard() {
   const { isLoaded, isSignedIn } = useAuth();
-  const router = useRouter();
   const [sleepDurationHours, setSleepDurationHours] = useState(
     defaultSleepDurationHours
   );
@@ -96,19 +94,6 @@ export default function LaunchpadDashboard() {
   const minimumReached = gratitudeLength >= 8;
 
   const wakeSet = wakeTime.length > 0;
-
-  useEffect(() => {
-    if (!isLoaded || isSignedIn !== false) {
-      return;
-    }
-
-    resetEntryFormState();
-    setEntryDate(new Date().toISOString().slice(0, 10));
-    setIsLoadingEntry(false);
-    setIsSubmitting(false);
-    router.refresh();
-    window.location.replace("/sign-in");
-  }, [isLoaded, isSignedIn, resetEntryFormState, router]);
 
   useEffect(() => {
     if (!entryDate || !isLoaded || !isSignedIn) {
@@ -346,6 +331,16 @@ export default function LaunchpadDashboard() {
           className="rounded-sm bg-surface-high p-5 shadow-[0_20px_44px_rgba(0,0,0,0.22)] sm:p-6"
           onSubmit={async (event) => {
             event.preventDefault();
+
+            if (!isLoaded) {
+              return;
+            }
+
+            if (!isSignedIn) {
+              const redirectUrl = encodeURIComponent("/");
+              window.location.assign(`/sign-in?redirect_url=${redirectUrl}`);
+              return;
+            }
 
             if (
               !minimumReached ||
