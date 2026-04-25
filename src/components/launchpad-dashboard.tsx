@@ -4,42 +4,173 @@ import { useAuth } from "@clerk/nextjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
+  ActivityIcon,
   BatteryIcon,
   BoltIcon,
+  FlameIcon,
+  LotusIcon,
   MoonIcon,
+  SparkIcon,
+  StackIcon,
+  TrophyIcon,
+  WaveIcon,
 } from "@/components/command-icons";
 
 const cognitiveStates = [
   {
     id: "sleepy",
-    label: "SLEEPY",
+    label: "Sleepy",
     icon: MoonIcon,
-    description: "Rest mode recommended",
+    description: "Lower intensity, protect recovery.",
+    score: 14,
   },
   {
     id: "energized",
-    label: "ENERGIZED",
+    label: "Energized",
     icon: BoltIcon,
-    description: "Peak output window active",
+    description: "Push the primary objective.",
+    score: 28,
   },
   {
     id: "foggy",
-    label: "FOGGY",
+    label: "Foggy",
     icon: BatteryIcon,
-    description: "Mental clarity low - take a break",
+    description: "Reduce noise, regain clarity.",
+    score: 18,
   },
 ] as const;
+
+const protocolPillars = [
+  {
+    id: "sleep",
+    label: "Sleep",
+    icon: MoonIcon,
+    metric: "Bedtime lock",
+    detail: "Protect the final 30 minutes and keep wake time honest.",
+  },
+  {
+    id: "body",
+    label: "Body",
+    icon: FlameIcon,
+    metric: "Training signal",
+    detail: "Gym, walk, mobility, or clean nutrition action.",
+  },
+  {
+    id: "focus",
+    label: "Focus",
+    icon: StackIcon,
+    metric: "Deep block",
+    detail: "One clean work sprint before drift takes the wheel.",
+  },
+  {
+    id: "connection",
+    label: "Connection",
+    icon: WaveIcon,
+    metric: "Brotherhood touch",
+    detail: "One message, call, or honest check-in with a real person.",
+  },
+] as const;
+
+const eveningChecks = [
+  "Moved body",
+  "Protected focus",
+  "Controlled impulses",
+  "Reached out",
+];
 
 const progressTicks = [0, 1, 2, 3, 4, 5];
 const defaultSleepDurationHours = 7.5;
 
+type Mood = (typeof cognitiveStates)[number]["id"];
+type ProtocolPillar = (typeof protocolPillars)[number]["id"];
+
 type RiseAndGrindEntry = {
   wakeUpTime: string;
   sleepDurationHours: number;
-  mood?: (typeof cognitiveStates)[number]["id"];
-  state?: (typeof cognitiveStates)[number]["id"];
+  mood?: Mood;
+  state?: Mood;
   gratitude: string;
 };
+
+type CoachCard = {
+  readout: string;
+  todayPlan: string[];
+  habitTweaks: string[];
+  riskFlags: string[];
+  brotherhoodChallenge: string;
+  checkInQuestion: string;
+  safetyNote: string;
+};
+
+type CoachCardDocument = {
+  card?: CoachCard;
+  source?: string;
+};
+
+function cx(...values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(" ");
+}
+
+function SkeletonBlock({
+  className,
+  label,
+}: {
+  className: string;
+  label?: string;
+}) {
+  return (
+    <span
+      aria-label={label}
+      className={cx(
+        "block animate-pulse rounded-[0.16rem] bg-[linear-gradient(90deg,rgba(255,255,255,0.045),rgba(143,245,255,0.09),rgba(255,255,255,0.045))] bg-[length:220%_100%]",
+        className
+      )}
+    />
+  );
+}
+
+function CoachCardSkeleton() {
+  return (
+    <div className="min-h-[440px]">
+      <div className="flex gap-2">
+        <SkeletonBlock className="h-6 w-24" />
+        <SkeletonBlock className="h-6 w-36" />
+      </div>
+
+      <div className="mt-5 space-y-3">
+        <SkeletonBlock className="h-5 w-full" />
+        <SkeletonBlock className="h-5 w-11/12" />
+        <SkeletonBlock className="h-5 w-8/12" />
+      </div>
+
+      <div className="mt-7 grid gap-4 lg:grid-cols-3">
+        {[0, 1, 2].map((item) => (
+          <div key={item} className="rounded-[0.18rem] bg-white/[0.035] p-4">
+            <SkeletonBlock className="h-4 w-24" />
+            <div className="mt-5 space-y-3">
+              <SkeletonBlock className="h-4 w-full" />
+              <SkeletonBlock className="h-4 w-10/12" />
+              <SkeletonBlock className="h-4 w-9/12" />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <div className="rounded-[0.18rem] bg-primary/10 p-4">
+          <SkeletonBlock className="h-4 w-40" />
+          <SkeletonBlock className="mt-5 h-5 w-11/12" />
+          <SkeletonBlock className="mt-3 h-5 w-8/12" />
+        </div>
+        <div className="rounded-[0.18rem] bg-white/[0.035] p-4">
+          <SkeletonBlock className="h-4 w-40" />
+          <SkeletonBlock className="mt-5 h-5 w-full" />
+          <SkeletonBlock className="mt-3 h-5 w-7/12" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function LaunchpadDashboard() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -51,22 +182,36 @@ export default function LaunchpadDashboard() {
   const [entryDate, setEntryDate] = useState(() =>
     new Date().toISOString().slice(0, 10)
   );
-  const [state, setState] =
-    useState<(typeof cognitiveStates)[number]["id"]>("energized");
+  const [state, setState] = useState<Mood>("energized");
+  const [focusPillar, setFocusPillar] = useState<ProtocolPillar>("focus");
   const [launched, setLaunched] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingEntry, setIsLoadingEntry] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState("");
+  const [coachCard, setCoachCard] = useState<CoachCard | null>(null);
+  const [coachSource, setCoachSource] = useState("");
+  const [isLoadingCoachCard, setIsLoadingCoachCard] = useState(false);
+  const [isGeneratingCoachCard, setIsGeneratingCoachCard] = useState(false);
+  const [coachError, setCoachError] = useState("");
+  const [coachSuccess, setCoachSuccess] = useState("");
 
   const resetEntryFormState = useCallback(() => {
     setWakeTime("");
     setSleepDurationHours(defaultSleepDurationHours);
     setState("energized");
     setGratitude("");
+    setFocusPillar("focus");
     setLaunched(false);
     setSubmitSuccess("");
     setSubmitError("");
+  }, []);
+
+  const resetCoachCardState = useCallback(() => {
+    setCoachCard(null);
+    setCoachSource("");
+    setCoachSuccess("");
+    setCoachError("");
   }, []);
 
   const currentDateLabel = useMemo(() => {
@@ -74,12 +219,12 @@ export default function LaunchpadDashboard() {
       weekday: "long",
       month: "long",
       day: "numeric",
-    }).format(new Date());
-  }, []);
+    }).format(new Date(`${entryDate}T00:00:00`));
+  }, [entryDate]);
 
   const wakeTimeLabel = useMemo(() => {
     if (!wakeTime) {
-      return "Set wake up time";
+      return "Unset";
     }
 
     const [hours, minutes] = wakeTime.split(":").map(Number);
@@ -90,10 +235,228 @@ export default function LaunchpadDashboard() {
     return `${normalizedHours}:${paddedMinutes} ${meridiem}`;
   }, [wakeTime]);
 
+  const selectedState = cognitiveStates.find(({ id }) => id === state);
+  const selectedPillar = protocolPillars.find(({ id }) => id === focusPillar);
   const gratitudeLength = gratitude.trim().length;
   const minimumReached = gratitudeLength >= 8;
-
   const wakeSet = wakeTime.length > 0;
+  const readinessScore = Math.min(
+    100,
+    Math.round(
+      Math.max(10, Math.min(42, sleepDurationHours * 5)) +
+        (selectedState?.score || 0) +
+        (wakeSet ? 12 : 0) +
+        (minimumReached ? 18 : Math.min(12, gratitudeLength))
+    )
+  );
+  const completionLabel = launched ? "Command Saved" : "Morning Open";
+  const isEntryHydrating = isLoadingEntry && !isSubmitting;
+  const isCoachCardBusy = isLoadingCoachCard || isGeneratingCoachCard;
+
+  const loadCoachCardForDate = useCallback(
+    async (date: string) => {
+      if (!date || !isLoaded || !isSignedIn) {
+        resetCoachCardState();
+        return;
+      }
+
+      setIsLoadingCoachCard(true);
+      resetCoachCardState();
+      setCoachError("");
+
+      try {
+        const response = await fetch(
+          `/api/coach/daily?date=${encodeURIComponent(date)}&phase=morning`,
+          {
+            cache: "no-store",
+          }
+        );
+
+        if (response.status === 401) {
+          resetCoachCardState();
+          return;
+        }
+
+        const payload = (await response.json()) as {
+          success?: boolean;
+          message?: string;
+          data?: CoachCardDocument[];
+        };
+
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.message || "Could not load coach card.");
+        }
+
+        const savedCard = payload.data?.[0];
+
+        if (!savedCard?.card) {
+          resetCoachCardState();
+          return;
+        }
+
+        setCoachCard(savedCard.card);
+        setCoachSource(savedCard.source || "stored");
+        setCoachSuccess("Coach card loaded.");
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to load coach card.";
+
+        setCoachError(message);
+      } finally {
+        setIsLoadingCoachCard(false);
+      }
+    },
+    [isLoaded, isSignedIn, resetCoachCardState]
+  );
+
+  const generateCoachCard = useCallback(
+    async ({ force = false }: { force?: boolean } = {}) => {
+      if (!isLoaded) {
+        return;
+      }
+
+      if (!isSignedIn) {
+        const redirectUrl = encodeURIComponent("/");
+        window.location.assign(`/sign-in?redirect_url=${redirectUrl}`);
+        return;
+      }
+
+      if (!entryDate || isGeneratingCoachCard) {
+        return;
+      }
+
+      setIsGeneratingCoachCard(true);
+      resetCoachCardState();
+      setCoachError("");
+      setCoachSuccess("");
+
+      try {
+        const response = await fetch("/api/coach/daily", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            date: entryDate,
+            phase: "morning",
+            force,
+            userNote: [
+              gratitude.trim(),
+              selectedPillar ? `Today pillar: ${selectedPillar.label}` : "",
+            ]
+              .filter(Boolean)
+              .join("\n"),
+          }),
+        });
+
+        if (response.status === 401) {
+          const redirectUrl = encodeURIComponent("/");
+          window.location.assign(`/sign-in?redirect_url=${redirectUrl}`);
+          return;
+        }
+
+        const payload = (await response.json()) as {
+          success?: boolean;
+          generated?: boolean;
+          source?: string;
+          message?: string;
+          data?: CoachCardDocument;
+        };
+
+        if (!response.ok || !payload.success || !payload.data?.card) {
+          throw new Error(payload.message || "Could not generate coach card.");
+        }
+
+        setCoachCard(payload.data.card);
+        setCoachSource(payload.source || payload.data.source || "stored");
+        setCoachSuccess(
+          payload.generated ? "Coach card ready." : "Saved coach card loaded."
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Failed to generate coach card.";
+
+        setCoachError(message);
+      } finally {
+        setIsGeneratingCoachCard(false);
+      }
+    },
+    [
+      entryDate,
+      gratitude,
+      isGeneratingCoachCard,
+      isLoaded,
+      isSignedIn,
+      selectedPillar,
+      resetCoachCardState,
+    ]
+  );
+
+  const saveMorningCommand = async () => {
+    if (!isLoaded) {
+      return;
+    }
+
+    if (!isSignedIn) {
+      const redirectUrl = encodeURIComponent("/");
+      window.location.assign(`/sign-in?redirect_url=${redirectUrl}`);
+      return;
+    }
+
+    if (
+      !minimumReached ||
+      isSubmitting ||
+      isLoadingEntry ||
+      !wakeSet ||
+      !entryDate
+    ) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitError("");
+    setSubmitSuccess("");
+
+    try {
+      const response = await fetch("/api/riseandgrind", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          wakeUpTime: wakeTime,
+          sleepDurationHours,
+          date: entryDate,
+          mood: state,
+          gratitude,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        success?: boolean;
+        message?: string;
+      };
+
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || "Could not save your entry.");
+      }
+
+      setLaunched(true);
+      setSubmitSuccess("Morning command saved.");
+      setSubmitError("");
+      void generateCoachCard({ force: true });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to connect to backend.";
+
+      setSubmitError(message);
+      setLaunched(false);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     if (!entryDate || !isLoaded || !isSignedIn) {
@@ -104,6 +467,7 @@ export default function LaunchpadDashboard() {
 
     const loadEntryForDate = async () => {
       setIsLoadingEntry(true);
+      resetEntryFormState();
 
       try {
         const response = await fetch(
@@ -153,7 +517,7 @@ export default function LaunchpadDashboard() {
         setState(moodIsValid ? entryMood! : "energized");
         setGratitude(entry.gratitude || "");
         setLaunched(true);
-        setSubmitSuccess("Loaded your saved entry for this date.");
+        setSubmitSuccess("Saved command loaded.");
         setSubmitError("");
       } catch (error) {
         if (!isCancelled) {
@@ -177,124 +541,193 @@ export default function LaunchpadDashboard() {
     };
   }, [entryDate, isLoaded, isSignedIn, resetEntryFormState]);
 
+  useEffect(() => {
+    void loadCoachCardForDate(entryDate);
+  }, [entryDate, loadCoachCardForDate]);
+
   return (
-    <div className="flex flex-col gap-6">
-      <section className="relative overflow-hidden rounded-sm border border-white/4 bg-[radial-gradient(circle_at_top_left,rgba(143,245,255,0.06),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.018),rgba(255,255,255,0.008)),#101011] px-5 py-8 shadow-[0_32px_90px_rgba(0,0,0,0.34)] sm:px-8 sm:py-10">
-        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[38%] bg-[radial-gradient(circle_at_40%_20%,rgba(255,255,255,0.03),transparent_35%),linear-gradient(180deg,transparent,rgba(255,255,255,0.02),transparent)] lg:block" />
-        <div className="pointer-events-none absolute right-[14%] top-8 hidden h-28 w-28 rounded-full border border-white/2 lg:block" />
-        <div className="pointer-events-none absolute right-[12%] top-14 hidden h-px w-44 bg-white/4 lg:block" />
-        <div className="pointer-events-none absolute right-[18%] top-[7.4rem] hidden h-20 w-36 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),transparent)] mask-[repeating-linear-gradient(90deg,#000_0_7px,transparent_7px_18px)] lg:block" />
-
-        <div className="relative flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+    <div className="flex flex-col gap-5">
+      <section className="relative overflow-hidden rounded-sm bg-[#101011] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.34),inset_0_0_0_1px_rgba(255,255,255,0.035)] sm:p-7">
+        <div className="absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,var(--primary),rgba(154,253,168,0.78),rgba(255,255,255,0.18))]" />
+        <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div>
-            <p className="font-display text-[0.78rem] uppercase tracking-[0.42em] text-primary/80">
-              Start your day with intention
+            <p className="font-display text-[0.7rem] font-semibold uppercase tracking-[0.34em] text-primary/76">
+              Daily Operating System
             </p>
-            <h1 className="mt-4 font-display text-[3rem] font-semibold tracking-[-0.05em] text-white sm:text-[4.6rem] sm:leading-[0.94]">
-              Rise &amp; Grind
+            <h1 className="mt-3 max-w-4xl font-display text-[2.65rem] font-semibold leading-[0.95] tracking-[-0.05em] text-white sm:text-[4.6rem]">
+              AI Brotherhood Coach
             </h1>
-
-            <div className="mt-3 text-white/58">
-              <span className="font-display text-[2rem] tracking-[-0.04em] sm:text-[2.7rem]">
-                {currentDateLabel}
-              </span>
+            <div className="mt-5 flex flex-wrap gap-2">
+              {isEntryHydrating ? (
+                <>
+                  <SkeletonBlock className="h-8 w-36" />
+                  <SkeletonBlock className="h-8 w-28" />
+                  <SkeletonBlock className="h-8 w-24" />
+                  <SkeletonBlock className="h-8 w-28" />
+                </>
+              ) : (
+                [
+                  currentDateLabel,
+                  `Wake ${wakeTimeLabel}`,
+                  selectedState?.label || "State",
+                  selectedPillar?.label || "Focus",
+                ].map((item) => (
+                  <span
+                    key={item}
+                    className="rounded-[0.18rem] bg-white/[0.045] px-3 py-2 font-display text-[0.62rem] uppercase tracking-[0.18em] text-white/56"
+                  >
+                    {item}
+                  </span>
+                ))
+              )}
             </div>
           </div>
 
-          <div className="w-full max-w-[320px] self-start lg:self-end">
-            <div className="rounded-sm border border-white/6 bg-black/54 p-4 shadow-[0_16px_40px_rgba(0,0,0,0.24)] backdrop-blur-sm">
-              <p className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.24em] text-primary/80">
-                Wake and Date
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-[0.2rem] bg-black/56 p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.035)]">
+              <p className="font-display text-[0.58rem] uppercase tracking-[0.2em] text-white/34">
+                Readiness
               </p>
-              <label className="mt-3 block text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/28">
-                Set wake up time
-              </label>
-              <input
-                aria-label="Set wake up time"
-                className="mt-2 w-full rounded-[0.18rem] border border-white/8 bg-black/82 px-3 py-3 font-display text-[1.15rem] tracking-[-0.03em] text-white outline-none transition focus:border-primary/60 focus:shadow-[0_0_0_1px_rgba(143,245,255,0.12)]"
-                type="time"
-                value={wakeTime}
-                onChange={(event) => setWakeTime(event.target.value)}
-              />
+              {isEntryHydrating ? (
+                <div className="mt-5">
+                  <SkeletonBlock className="h-12 w-24" />
+                </div>
+              ) : (
+                <div className="mt-4 flex items-end gap-2">
+                  <span className="font-display text-5xl font-semibold tracking-[-0.05em] text-white">
+                    {readinessScore}
+                  </span>
+                  <span className="pb-2 text-sm uppercase text-white/30">
+                    /100
+                  </span>
+                </div>
+              )}
+            </div>
 
-              <label className="mt-3 block text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/28">
-                Select date
-              </label>
-              <input
-                aria-label="Select entry date"
-                className="mt-2 w-full rounded-[0.18rem] border border-white/8 bg-black/82 px-3 py-3 font-display text-[1.15rem] tracking-[-0.03em] text-white outline-none transition focus:border-primary/60 focus:shadow-[0_0_0_1px_rgba(143,245,255,0.12)]"
-                type="date"
-                value={entryDate}
-                onChange={(event) => setEntryDate(event.target.value)}
-              />
-
-              <p className="mt-3 text-[0.76rem] uppercase tracking-[0.2em] text-white/34">
-                {wakeSet ? `Wake ${wakeTimeLabel}` : "Set wake time"}
+            <div className="rounded-[0.2rem] bg-black/56 p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.035)]">
+              <p className="font-display text-[0.58rem] uppercase tracking-[0.2em] text-white/34">
+                Status
               </p>
+              {isEntryHydrating ? (
+                <div className="mt-5 space-y-4">
+                  <SkeletonBlock className="h-8 w-32" />
+                  <SkeletonBlock className="h-4 w-36" />
+                </div>
+              ) : (
+                <>
+                  <div className="mt-5 inline-flex rounded-[0.18rem] bg-primary/12 px-3 py-2 font-display text-[0.65rem] uppercase tracking-[0.18em] text-primary">
+                    {completionLabel}
+                  </div>
+                  <p className="mt-4 text-sm leading-6 text-white/42">
+                    {coachCard ? "Coach online" : "Coach awaiting signal"}
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[220px_1fr]">
-        <div className="grid gap-4">
-          <article className="rounded-sm bg-surface-high p-5 shadow-[0_20px_44px_rgba(0,0,0,0.22)]">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.24em] text-primary/70">
-                  How well did you sleep last night?
-                </p>
-                <p className="mt-2 text-sm text-white/46">Sleep Duration Input</p>
-              </div>
-              <MoonIcon className="h-4.5 w-4.5 text-white/50" />
+      <section className="grid gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
+        <form
+          className="rounded-sm bg-surface-high p-5 shadow-[0_20px_44px_rgba(0,0,0,0.22)]"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveMorningCommand();
+          }}
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.24em] text-primary/70">
+                Morning Command
+              </p>
+              <h2 className="mt-2 font-display text-2xl font-semibold tracking-[-0.03em] text-white">
+                Set the day
+              </h2>
             </div>
+            <SparkIcon className="h-5 w-5 text-primary/70" />
+          </div>
 
-            <div className="mt-6 flex items-end gap-3">
-              <div className="bg-black/72 px-4 py-2.5 font-display text-[2.2rem] font-semibold leading-none tracking-[-0.04em] text-white">
-                {sleepDurationHours.toFixed(1)}
-              </div>
-              <span className="pb-2 text-xl uppercase tracking-[0.02em] text-white/28">
-                HRS
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+            <label className="block">
+              <span className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-white/34">
+                Wake Time
               </span>
-            </div>
-
-            <div className="mt-6">
               <input
-                aria-label="Sleep duration in hours"
-                className="sleep-slider"
-                type="range"
-                min="4"
-                max="10"
-                step="0.5"
-                value={sleepDurationHours}
-                onChange={(event) =>
-                  setSleepDurationHours(Number(event.target.value))
-                }
+                aria-label="Set wake up time"
+                className="mt-2 w-full rounded-[0.18rem] border border-white/8 bg-black/70 px-3 py-3 font-display text-[1.02rem] tracking-[-0.03em] text-white outline-none transition focus:border-primary/60 focus:shadow-[0_0_0_1px_rgba(143,245,255,0.12)]"
+                type="time"
+                value={wakeTime}
+                onChange={(event) => {
+                  setWakeTime(event.target.value);
+                  setLaunched(false);
+                }}
               />
+            </label>
 
-              <div className="mt-4 flex gap-2">
-                {progressTicks.map((tick) => (
-                  <span
-                    key={tick}
-                    className="h-0.75 flex-1 rounded-full bg-white/16"
-                    style={{
-                      background:
-                        tick <= Math.round(sleepDurationHours - 4)
-                          ? "rgba(143, 245, 255, 0.92)"
-                          : "rgba(255,255,255,0.15)",
-                    }}
-                  />
-                ))}
+            <label className="block">
+              <span className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-white/34">
+                Date
+              </span>
+              <input
+                aria-label="Select entry date"
+                className="mt-2 w-full rounded-[0.18rem] border border-white/8 bg-black/70 px-3 py-3 font-display text-[1.02rem] tracking-[-0.03em] text-white outline-none transition focus:border-primary/60 focus:shadow-[0_0_0_1px_rgba(143,245,255,0.12)]"
+                type="date"
+                value={entryDate}
+                onChange={(event) => setEntryDate(event.target.value)}
+              />
+            </label>
+          </div>
+
+          <div className="mt-5 rounded-[0.18rem] bg-black/48 p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-white/34">
+                  Sleep
+                </p>
+                <div className="mt-2 flex items-end gap-2">
+                  <span className="font-display text-4xl font-semibold tracking-[-0.04em] text-white">
+                    {sleepDurationHours.toFixed(1)}
+                  </span>
+                  <span className="pb-1 text-sm uppercase text-white/30">hrs</span>
+                </div>
               </div>
+              <MoonIcon className="h-5 w-5 text-white/42" />
             </div>
-          </article>
+            <input
+              aria-label="Sleep duration in hours"
+              className="sleep-slider mt-5"
+              type="range"
+              min="4"
+              max="10"
+              step="0.5"
+              value={sleepDurationHours}
+              onChange={(event) => {
+                setSleepDurationHours(Number(event.target.value));
+                setLaunched(false);
+              }}
+            />
+            <div className="mt-4 flex gap-2">
+              {progressTicks.map((tick) => (
+                <span
+                  key={tick}
+                  className="h-0.75 flex-1 rounded-full"
+                  style={{
+                    background:
+                      tick <= Math.round(sleepDurationHours - 4)
+                        ? "rgba(143, 245, 255, 0.92)"
+                        : "rgba(255,255,255,0.15)",
+                  }}
+                />
+              ))}
+            </div>
+          </div>
 
-          <article className="rounded-sm bg-surface-high p-5 shadow-[0_20px_44px_rgba(0,0,0,0.22)]">
-            <p className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.24em] text-primary/70">
-              Energy Check
+          <div className="mt-5">
+            <p className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-white/34">
+              State
             </p>
-
-            <div className="mt-5 grid grid-cols-3 gap-3">
+            <div className="mt-3 grid grid-cols-3 gap-2">
               {cognitiveStates.map(({ id, label, icon: Icon, description }) => {
                 const selected = id === state;
 
@@ -302,137 +735,81 @@ export default function LaunchpadDashboard() {
                   <button
                     key={id}
                     type="button"
-                    onClick={() => setState(id)}
-                    className={`group flex min-h-22 flex-col items-start justify-between rounded-[0.2rem] border px-3 py-3 text-left ${
+                    onClick={() => {
+                      setState(id);
+                      setLaunched(false);
+                    }}
+                    className={cx(
+                      "group flex min-h-24 flex-col items-start justify-between rounded-[0.18rem] px-3 py-3 text-left",
                       selected
-                        ? "border-primary/48 bg-black/78 text-white shadow-[0_0_0_1px_rgba(143,245,255,0.14),0_0_28px_rgba(143,245,255,0.08)]"
-                        : "border-white/6 bg-black/58 text-white/38 hover:border-white/14 hover:text-white/72"
-                    }`}
+                        ? "bg-black/76 text-white shadow-[inset_0_0_0_1px_rgba(143,245,255,0.42),0_0_28px_rgba(143,245,255,0.08)]"
+                        : "bg-black/44 text-white/42 hover:bg-black/62 hover:text-white/74"
+                    )}
                     aria-pressed={selected}
                   >
                     <Icon className="h-4.5 w-4.5" />
-                    <div>
-                      <div className="font-display text-[0.58rem] uppercase tracking-[0.18em]">
-                        {id === "sleepy" ? "😴 " : id === "energized" ? "⚡ " : "😵 "}
-                        {label}
-                      </div>
-                      <div className="mt-1 text-[0.56rem] uppercase tracking-[0.12em] text-white/30 group-hover:text-white/42">
-                        {description}
-                      </div>
-                    </div>
+                    <span className="font-display text-[0.56rem] uppercase tracking-[0.16em]">
+                      {label}
+                    </span>
+                    <span className="text-[0.56rem] leading-4 text-white/32 group-hover:text-white/44">
+                      {description}
+                    </span>
                   </button>
                 );
               })}
             </div>
-          </article>
-        </div>
+          </div>
 
-        <form
-          className="rounded-sm bg-surface-high p-5 shadow-[0_20px_44px_rgba(0,0,0,0.22)] sm:p-6"
-          onSubmit={async (event) => {
-            event.preventDefault();
+          <div className="mt-5">
+            <p className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-white/34">
+              Pillar Focus
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {protocolPillars.map(({ id, label, icon: Icon }) => {
+                const selected = id === focusPillar;
 
-            if (!isLoaded) {
-              return;
-            }
-
-            if (!isSignedIn) {
-              const redirectUrl = encodeURIComponent("/");
-              window.location.assign(`/sign-in?redirect_url=${redirectUrl}`);
-              return;
-            }
-
-            if (
-              !minimumReached ||
-              isSubmitting ||
-              isLoadingEntry ||
-              !wakeSet ||
-              !entryDate
-            ) {
-              return;
-            }
-
-            setIsSubmitting(true);
-            setSubmitError("");
-            setSubmitSuccess("");
-
-            try {
-              const response = await fetch("/api/riseandgrind", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  wakeUpTime: wakeTime,
-                  sleepDurationHours,
-                  date: entryDate,
-                  mood: state,
-                  gratitude,
-                }),
-              });
-
-              const payload = (await response.json()) as {
-                success?: boolean;
-                message?: string;
-              };
-
-              if (!response.ok || !payload.success) {
-                throw new Error(payload.message || "Could not save your entry.");
-              }
-
-              setLaunched(true);
-              setSubmitSuccess("Entry saved for this date.");
-              setSubmitError("");
-            } catch (error) {
-              const message =
-                error instanceof Error
-                  ? error.message
-                  : "Failed to connect to backend.";
-
-              setSubmitError(message);
-              setLaunched(false);
-            } finally {
-              setIsSubmitting(false);
-            }
-          }}
-        >
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.24em] text-primary/70">
-                Gratitude Manifest
-              </p>
-            </div>
-            <div className="text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/22">
-              Minimum 8 Characters Required
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => {
+                      setFocusPillar(id);
+                      setLaunched(false);
+                    }}
+                    className={cx(
+                      "flex items-center gap-2 rounded-[0.18rem] px-3 py-3 text-left font-display text-[0.62rem] uppercase tracking-[0.18em]",
+                      selected
+                        ? "bg-primary/14 text-primary shadow-[inset_0_0_0_1px_rgba(143,245,255,0.24)]"
+                        : "bg-black/44 text-white/42 hover:bg-black/62 hover:text-white/74"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          <div className="mt-4 rounded-[0.15rem] bg-black/78 p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]">
+          <label className="mt-5 block">
+            <span className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-white/34">
+              Gratitude / Grounding
+            </span>
             <textarea
-              className="manifest-scrollbar min-h-43 w-full resize-none bg-transparent text-lg leading-8 text-white/92 outline-none placeholder:text-white/22"
-              placeholder="Write one thing you're grateful for today..."
+              className="manifest-scrollbar mt-2 min-h-36 w-full resize-none rounded-[0.18rem] bg-black/70 p-4 text-base leading-7 text-white/90 outline-none placeholder:text-white/24 focus:shadow-[0_0_0_1px_rgba(143,245,255,0.28)]"
+              placeholder="Name one thing worth protecting today..."
               value={gratitude}
               onChange={(event) => {
                 setGratitude(event.target.value);
-                if (launched) {
-                  setLaunched(false);
-                }
+                setLaunched(false);
               }}
             />
-          </div>
+          </label>
 
-          <div className="mt-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex items-center gap-3 text-sm text-white/34">
-              <div>
-                <p>
-                  Mood selected: <span className="text-white/72">{state}</span>
-                </p>
-                <p className="mt-1 text-[0.72rem] uppercase tracking-[0.16em] text-white/22">
-                  {sleepDurationHours.toFixed(1)} hrs planned sleep
-                </p>
-              </div>
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-[0.72rem] uppercase tracking-[0.16em] text-white/30">
+              {gratitudeLength}/8 minimum signal
             </div>
-
             <button
               type="submit"
               disabled={
@@ -442,34 +819,302 @@ export default function LaunchpadDashboard() {
                 !wakeSet ||
                 !entryDate
               }
-              className={`inline-flex min-h-12 items-center justify-center rounded-[0.2rem] px-8 text-[0.82rem] font-semibold uppercase tracking-[0.24em] ${
+              className={cx(
+                "inline-flex min-h-12 items-center justify-center gap-2 rounded-[0.2rem] px-6 text-[0.76rem] font-semibold uppercase tracking-[0.2em]",
                 minimumReached &&
-                !isSubmitting &&
-                !isLoadingEntry &&
-                wakeSet &&
-                !!entryDate
+                  !isSubmitting &&
+                  !isLoadingEntry &&
+                  wakeSet &&
+                  !!entryDate
                   ? "bg-[linear-gradient(135deg,var(--primary),var(--primary-container))] text-[#0b1112] shadow-[0_0_28px_rgba(143,245,255,0.16)] hover:-translate-y-px"
                   : "cursor-not-allowed bg-white/8 text-white/26"
-              }`}
+              )}
             >
+              <TrophyIcon className="h-4 w-4" />
               {isLoadingEntry
-                ? "Loading..."
+                ? "Loading"
                 : isSubmitting
-                ? "Saving..."
-                : launched
-                  ? "Day Active"
-                  : "Commence Day"}
+                  ? "Saving"
+                  : launched
+                    ? "Saved"
+                    : "Lock Command"}
             </button>
           </div>
 
-          {submitError ? (
-            <p className="mt-3 text-sm text-red-300">{submitError}</p>
-          ) : null}
-
-          {submitSuccess ? (
-            <p className="mt-3 text-sm text-primary">{submitSuccess}</p>
-          ) : null}
+          <div aria-live="polite" className="mt-3 min-h-5">
+            {submitError ? (
+              <p className="text-sm text-red-300">{submitError}</p>
+            ) : submitSuccess ? (
+              <p className="text-sm text-primary">{submitSuccess}</p>
+            ) : null}
+          </div>
         </form>
+
+        <article className="rounded-sm bg-surface-high p-5 shadow-[0_20px_44px_rgba(0,0,0,0.22)]">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.24em] text-primary/70">
+                Coach Card
+              </p>
+              <h2 className="mt-2 font-display text-2xl font-semibold tracking-[-0.03em] text-white sm:text-3xl">
+                Today&apos;s orders
+              </h2>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void generateCoachCard({ force: true })}
+              disabled={
+                !isLoaded ||
+                isGeneratingCoachCard ||
+                isLoadingCoachCard ||
+                !entryDate ||
+                !launched
+              }
+              className={cx(
+                "inline-flex min-h-11 items-center justify-center gap-2 rounded-[0.2rem] px-5 text-[0.72rem] font-semibold uppercase tracking-[0.18em]",
+                isLoaded &&
+                  !isGeneratingCoachCard &&
+                  !isLoadingCoachCard &&
+                  !!entryDate &&
+                  launched
+                  ? "bg-[linear-gradient(135deg,var(--primary),var(--primary-container))] text-[#0b1112] shadow-[0_0_26px_rgba(143,245,255,0.14)] hover:-translate-y-px"
+                  : "cursor-not-allowed bg-white/8 text-white/26"
+              )}
+            >
+              <SparkIcon className="h-4 w-4" />
+              {isGeneratingCoachCard
+                ? "Generating"
+                : coachCard
+                  ? "Regenerate"
+                  : "Generate"}
+            </button>
+          </div>
+
+          <div
+            aria-busy={isCoachCardBusy}
+            className="mt-5 min-h-[520px] rounded-[0.18rem] bg-black/66 p-5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.035)]"
+          >
+            {isCoachCardBusy ? (
+              <CoachCardSkeleton />
+            ) : coachCard ? (
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-[0.16rem] bg-primary/12 px-2.5 py-1 font-display text-[0.58rem] uppercase tracking-[0.2em] text-primary">
+                    {coachSource || "stored"}
+                  </span>
+                  <span className="font-display text-[0.58rem] uppercase tracking-[0.18em] text-white/26">
+                    Morning protocol
+                  </span>
+                </div>
+
+                <p className="mt-4 max-w-4xl text-lg leading-8 text-white/88">
+                  {coachCard.readout}
+                </p>
+
+                <div className="mt-6 grid gap-4 lg:grid-cols-3">
+                  <section className="rounded-[0.18rem] bg-white/[0.035] p-4">
+                    <div className="flex items-center gap-2 font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-primary/78">
+                      <BoltIcon className="h-4 w-4" />
+                      Plan
+                    </div>
+                    <ol className="mt-4 space-y-3 text-sm leading-6 text-white/72">
+                      {coachCard.todayPlan.map((item, index) => (
+                        <li key={`${item}-${index}`} className="flex gap-3">
+                          <span className="font-display text-primary/80">
+                            {String(index + 1).padStart(2, "0")}
+                          </span>
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </section>
+
+                  <section className="rounded-[0.18rem] bg-white/[0.035] p-4">
+                    <div className="flex items-center gap-2 font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-primary/78">
+                      <StackIcon className="h-4 w-4" />
+                      Tweaks
+                    </div>
+                    <ul className="mt-4 space-y-3 text-sm leading-6 text-white/72">
+                      {coachCard.habitTweaks.map((item) => (
+                        <li key={item} className="bg-black/32 px-3 py-2">
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+
+                  <section className="rounded-[0.18rem] bg-white/[0.035] p-4">
+                    <div className="flex items-center gap-2 font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-primary/78">
+                      <BatteryIcon className="h-4 w-4" />
+                      Risk
+                    </div>
+                    <ul className="mt-4 space-y-3 text-sm leading-6 text-white/72">
+                      {coachCard.riskFlags.map((item) => (
+                        <li key={item} className="bg-black/32 px-3 py-2">
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                </div>
+
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <section className="rounded-[0.18rem] bg-primary/10 p-4">
+                    <p className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-primary/80">
+                      Brotherhood Challenge
+                    </p>
+                    <p className="mt-3 text-base leading-7 text-white/86">
+                      {coachCard.brotherhoodChallenge}
+                    </p>
+                  </section>
+
+                  <section className="rounded-[0.18rem] bg-white/[0.035] p-4">
+                    <p className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-primary/80">
+                      Check-In Question
+                    </p>
+                    <p className="mt-3 text-base leading-7 text-white/78">
+                      {coachCard.checkInQuestion}
+                    </p>
+                  </section>
+                </div>
+
+                <p className="mt-4 text-xs leading-6 text-white/34">
+                  {coachCard.safetyNote}
+                </p>
+              </div>
+            ) : (
+              <div className="flex min-h-[440px] flex-col justify-center">
+                <p className="max-w-xl font-display text-3xl font-semibold tracking-[-0.04em] text-white/88">
+                  Lock the morning command to wake the coach.
+                </p>
+                <p className="mt-4 max-w-lg text-sm leading-7 text-white/46">
+                  The card will turn today&apos;s wake time, sleep, state,
+                  gratitude, pillar, and recent history into practical orders.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div aria-live="polite" className="mt-3 min-h-5">
+            {coachError ? (
+              <p className="text-sm text-red-300">{coachError}</p>
+            ) : coachSuccess ? (
+              <p className="text-sm text-primary">{coachSuccess}</p>
+            ) : null}
+          </div>
+        </article>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <article className="rounded-sm bg-surface-high p-5 shadow-[0_20px_44px_rgba(0,0,0,0.22)]">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.24em] text-primary/70">
+                Active Protocols
+              </p>
+              <h2 className="mt-2 font-display text-2xl font-semibold tracking-[-0.03em] text-white">
+                Four pillars
+              </h2>
+            </div>
+            <ActivityIcon className="h-5 w-5 text-primary/70" />
+          </div>
+
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {isEntryHydrating ? [0, 1, 2, 3].map((item) => (
+              <div
+                key={item}
+                className="min-h-48 rounded-[0.2rem] bg-black/54 p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.035)]"
+              >
+                <div className="flex items-center justify-between">
+                  <SkeletonBlock className="h-5 w-5" />
+                  <SkeletonBlock className="h-4 w-16" />
+                </div>
+                <SkeletonBlock className="mt-7 h-8 w-24" />
+                <SkeletonBlock className="mt-5 h-4 w-32" />
+                <SkeletonBlock className="mt-5 h-4 w-full" />
+                <SkeletonBlock className="mt-3 h-4 w-10/12" />
+              </div>
+            )) : protocolPillars.map(({ id, label, icon: Icon, metric, detail }) => {
+              const active = id === focusPillar;
+
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    setFocusPillar(id);
+                    setLaunched(false);
+                  }}
+                  className={cx(
+                    "min-h-48 rounded-[0.2rem] p-4 text-left shadow-[inset_0_0_0_1px_rgba(255,255,255,0.035)]",
+                    active
+                      ? "bg-primary/12 shadow-[inset_0_0_0_1px_rgba(143,245,255,0.26),0_0_28px_rgba(143,245,255,0.08)]"
+                      : "bg-black/54 hover:bg-black/68"
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <Icon
+                      className={cx(
+                        "h-5 w-5",
+                        active ? "text-primary" : "text-white/42"
+                      )}
+                    />
+                    <span className="font-display text-[0.58rem] uppercase tracking-[0.18em] text-white/28">
+                      {active ? "Primary" : "Reserve"}
+                    </span>
+                  </div>
+                  <h3 className="mt-5 font-display text-2xl font-semibold tracking-[-0.04em] text-white">
+                    {label}
+                  </h3>
+                  <p className="mt-3 font-display text-[0.62rem] uppercase tracking-[0.18em] text-primary/74">
+                    {metric}
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-white/48">{detail}</p>
+                </button>
+              );
+            })}
+          </div>
+        </article>
+
+        <article className="rounded-sm bg-surface-high p-5 shadow-[0_20px_44px_rgba(0,0,0,0.22)]">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.24em] text-primary/70">
+                PM Debrief
+              </p>
+              <h2 className="mt-2 font-display text-2xl font-semibold tracking-[-0.03em] text-white">
+                Close the loop
+              </h2>
+            </div>
+            <LotusIcon className="h-5 w-5 text-primary/70" />
+          </div>
+
+          <div className="mt-5 grid gap-2">
+            {eveningChecks.map((item) => (
+              <label
+                key={item}
+                className="flex items-center gap-3 rounded-[0.18rem] bg-black/52 px-3 py-3 text-sm text-white/68"
+              >
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[var(--primary)]"
+                />
+                {item}
+              </label>
+            ))}
+          </div>
+
+          <label className="mt-4 block">
+            <span className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-white/34">
+              Win / Friction
+            </span>
+            <textarea
+              className="manifest-scrollbar mt-2 min-h-28 w-full resize-none rounded-[0.18rem] bg-black/66 p-4 text-sm leading-6 text-white/82 outline-none placeholder:text-white/24 focus:shadow-[0_0_0_1px_rgba(143,245,255,0.28)]"
+              placeholder="One win. One friction point. One adjustment."
+            />
+          </label>
+        </article>
       </section>
     </div>
   );

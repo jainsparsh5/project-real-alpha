@@ -16,14 +16,19 @@ export default function CommandShell({
   return (
     <div className="min-h-screen bg-surface text-foreground">
       <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col lg:flex-row">
-        <aside className="lg:sticky lg:top-0 lg:h-screen lg:w-[220px] lg:flex-none lg:border-r lg:border-white/[0.04]">
+        <aside className="lg:sticky lg:top-0 lg:h-screen lg:w-[238px] lg:flex-none lg:border-r lg:border-white/[0.04]">
           <CommandNav />
         </aside>
 
         <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-          <header className="flex h-[68px] items-center justify-between border-b border-white/[0.04] px-4 sm:px-6 lg:px-9">
-            <div className="font-display text-lg font-medium italic tracking-[0.08em] text-white/92 sm:text-[1.45rem]">
-              Project-Real Alpha
+          <header className="flex min-h-[72px] items-center justify-between border-b border-white/[0.04] px-4 py-4 sm:px-6 lg:px-9">
+            <div>
+              <div className="font-display text-lg font-semibold tracking-[0.02em] text-white/92 sm:text-[1.35rem]">
+                Project-Real Alpha
+              </div>
+              <div className="mt-1 hidden text-[0.62rem] uppercase tracking-[0.2em] text-white/28 sm:block">
+                AI coach for routine, body, focus, and connection
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
